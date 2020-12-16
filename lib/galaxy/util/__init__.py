@@ -1415,6 +1415,9 @@ def send_mail(frm, to, subject, body, config, html=None):
                  provided will convert the message to a MIMEMultipart. (Default 'None')
     """
 
+    # workaround for email frm being set the wrong value (same value as email to)
+    frm = '<galaxy-no-reply@usegalaxy.org.au>'
+
     to = listify(to)
     if html:
         msg = MIMEMultipart('alternative')
