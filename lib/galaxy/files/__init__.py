@@ -15,6 +15,7 @@ from typing import (
 from galaxy import exceptions
 from galaxy.util import plugin_config
 from galaxy.util.dictifiable import Dictifiable
+from galaxy.files.sources import FilesSource
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class ConfiguredFileSources:
     ):
         self._file_sources_config = file_sources_config
         self._plugin_classes = self._file_source_plugins_dict()
-        file_sources = []
+        file_sources: List[FilesSource] = []
         if conf_file is not None:
             file_sources = self._load_plugins_from_file(conf_file)
         elif conf_dict is not None:
@@ -104,7 +105,8 @@ class ConfiguredFileSources:
                 id_prefix, path = rest.split("/", 1)
             else:
                 id_prefix, path = rest, "/"
-        file_source = self.get_file_source(id_prefix, scheme)
+
+        file_source = self.get_file_source(uri)
         return FileSourcePath(file_source, path)
 
     def validate_uri_root(self, uri, user_context):
@@ -139,15 +141,18 @@ class ConfiguredFileSources:
                     "Your FTP directory does not exist, attempting to upload files to it may cause it to be created."
                 )
 
-    def get_file_source(self, id_prefix, scheme):
+    def get_file_source(self, uri: str) -> Optional[FilesSource]:
+        """
+            returns the highest matching file source for the uri
+        """
+        selected_file_source = None
+        score = 0
+
         for file_source in self._file_sources:
-            # gxfiles uses prefix to find plugin, other scheme are assumed to have
-            # at most one file_source.
-            if scheme != file_source.get_scheme():
-                continue
-            prefix_match = scheme != "gxfiles" or file_source.get_prefix() == id_prefix
-            if prefix_match:
-                return file_source
+            if file_source.can_handle_uri(uri) > score:
+                selected_file_source = file_source
+
+        return selected_file_source
 
     def looks_like_uri(self, path_or_uri):
         # is this string a URI this object understands how to realize

@@ -59,15 +59,18 @@ class FilesSource(metaclass=abc.ABCMeta):
         context doesn't need to be present after the plugin is re-hydrated.
         """
 
+    @abc.abstractmethod
+    def can_handle_uri(self, uri: str) -> int:
+        """Return a score of how well this uri is being matched by the filesource
+
+        """
+
 
 class BaseFilesSource(FilesSource):
     plugin_type: ClassVar[str]
 
     def get_prefix(self):
         return self.id
-
-    def get_scheme(self):
-        return "gxfiles"
 
     def get_writable(self):
         return self.writable
@@ -86,6 +89,7 @@ class BaseFilesSource(FilesSource):
         return self.requires_roles is not None or self.requires_groups is not None
 
     def get_uri_root(self):
+        #ToDo: Compat hack
         prefix = self.get_prefix()
         scheme = self.get_scheme()
         root = f"{scheme}://"
@@ -216,6 +220,33 @@ class BaseFilesSource(FilesSource):
         if self.requires_groups and not BooleanExpressionEvaluator.is_valid_expression(self.requires_groups):
             raise ConfigurationError(_get_error_msg_for("requires_groups"))
 
+    @abc.abstractmethod
+    def _score_path(self, path: str) -> int:
+        """Scores the path for the file source
+        """
+        pass
+
+    def can_handle_uri(self, uri: str) -> int:
+        scheme, rest = uri.split("://", 1)
+
+        if scheme != "gxfiles":
+            # prefix unused
+            id_prefix = None
+            path = rest
+        else:
+            if "/" in rest:
+                id_prefix, path = rest.split("/", 1)
+            else:
+                id_prefix, path = rest, "/"
+
+        score = 0
+
+        if scheme == "gxfiles" and id_prefix == self.get_prefix():
+            score = 1E6
+        elif scheme == self.get_scheme():
+            score = self._score_path(path)
+
+        return score
 
 def uri_join(*args):
     # url_join doesn't work with non-standard scheme
